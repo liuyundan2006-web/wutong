@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>乌铜走银 · 手势灵境</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: "PingFang SC", system-ui, sans-serif; }
+        .info-panel { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); border-left: 4px solid #cd7f32; border-radius: 12px; padding: 12px 20px; color: #e6c8a0; z-index: 20; pointer-events: none; }
+        .gesture-status { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+        .gesture-badge { background: #2c1a0c; padding: 4px 12px; border-radius: 30px; color: #e6b45e; border: 1px solid #cd7f32; }
+        .camera-preview { position: absolute; bottom: 20px; left: 20px; width: 130px; height: 98px; border-radius: 12px; overflow: hidden; border: 2px solid #cd7f32; z-index: 20; background: #000; opacity: 0.85; pointer-events: none; }
+        .camera-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        .music-btn { position: absolute; bottom: 25px; right: 25px; width: 56px; height: 56px; border-radius: 50%; background: radial-gradient(circle at 30% 20%, #2f2a24, #1a140e); border: 1px solid #b87c3a; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 30; }
+        .music-icon { font-size: 28px; color: #e6b45e; }
+        .loading-tip { position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 20px; font-size: 12px; color: #cd9a5b; z-index: 20; pointer-events: none; }
+        @media (max-width: 600px) { .camera-preview { width: 90px; height: 68px; } .music-btn { width: 48px; height: 48px; } }
+    </style>
+</head>
+<body>
+    <div class="info-panel">
+        <h1>🏺 乌铜走银 · 灵韵匠心</h1>
+        <div class="gesture-status">
+            <span>✋ 手势：</span>
+            <span id="gestureDisplay" class="gesture-badge">等待摄像头...</span>
+        </div>
+        <div class="hint-text">✋ 张开手掌 → 加速旋转+放大 &nbsp;&nbsp; ✊ 握拳 → 停止+缩小</div>
+    </div>
+    <div class="camera-preview">
+        <video id="videoCam" autoplay playsinline muted></video>
+    </div>
+    <div class="music-btn" id="musicButton">
+        <span class="music-icon">🎵</span>
+    </div>
+    <div class="loading-tip" id="loadStatus">⚙️ 初始化中...</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0806);
+        scene.fog = new THREE.FogExp2(0x0a0806, 0.008);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(2, 1.2, 3.2);
+        camera.lookAt(0, 0.4, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // 灯光
+        const ambient = new THREE.AmbientLight(0x2a241e, 0.6);
+        scene.add(ambient);
+        const mainLight = new THREE.DirectionalLight(0xd9b48b, 1.2);
+        mainLight.position.set(2, 3, 1.5);
+        mainLight.castShadow = true;
+        scene.add(mainLight);
+        const backLight = new THREE.PointLight(0xc2743e, 0.6);
+        backLight.position.set(-1, 1.2, -2);
+        scene.add(backLight);
+        const fillLight = new THREE.PointLight(0x6a8e9e, 0.5);
+        fillLight.position.set(1.8, 1.5, 1);
+        scene.add(fillLight);
+        const rimLight = new THREE.PointLight(0xbc6f2c, 0.4);
+        rimLight.position.set(0, -0.5, 1);
+        scene.add(rimLight);
+
+        const grid = new THREE.GridHelper(8, 20, 0x9c7c4b, 0x4a3724);
+        grid.position.y = -0.7;
+        grid.material.transparent = true;
+        grid.material.opacity = 0.25;
+        scene.add(grid);
+
+        // 粒子
+        const particleCount = 800;
+        const particleGeo = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            positions[i*3] = (Math.random() - 0.5) * 12;
+            positions[i*3+1] = (Math.random() - 0.5) * 5;
+            positions[i*3+2] = (Math.random() - 0.5) * 8 - 2;
+        }
+        particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const particleMat = new THREE.PointsMaterial({ color: 0xcd7f32, size: 0.025, transparent: true, opacity: 0.4 });
+        const particles = new THREE.Points(particleGeo, particleMat);
+        scene.add(particles);
+
+        let currentModel = null;
+        let targetScaleVal = 1.0;
+        let targetRotSpeed = 0.68;
+        let currentRotSpeed = 0.68;
+        let lastTimestamp = performance.now();
+
+        const loadStatusDiv = document.getElementById('loadStatus');
+        const gestureSpan = document.getElementById('gestureDisplay');
+
+        function createBackupModel() {
+            const geometry = new THREE.TorusKnotGeometry(0.65, 0.16, 200, 24, 3, 4);
+            const material = new THREE.MeshStandardMaterial({ color: 0xbc7332, emissive: 0x2a1a0c, roughness: 0.3, metalness: 0.92, emissiveIntensity: 0.2 });
+            const knot = new THREE.Mesh(geometry, material);
+            knot.castShadow = true;
+            const wireframeMat = new THREE.MeshBasicMaterial({ color: 0xc9a87b, wireframe: true, transparent: true, opacity: 0.15 });
+            const wire = new THREE.Mesh(geometry, wireframeMat);
+            knot.add(wire);
+            return knot;
+        }
+
+        const loader = new GLTFLoader();
+        let backupActive = false;
+        loadStatusDiv.textContent = "📦 正在加载乌铜模型...";
+        
+        loader.load('./wutong.glb',
+            (gltf) => {
+                currentModel = gltf.scene;
+                currentModel.traverse(child => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        if (child.material) {
+                            const mats = Array.isArray(child.material) ? child.material : [child.material];
+                            mats.forEach(mat => {
+                                mat.roughness = Math.max(0.2, (mat.roughness || 0.5) * 0.9);
+                                mat.metalness = Math.min(0.96, (mat.metalness || 0.5) + 0.2);
+                            });
+                        }
+                    }
+                });
+                scene.add(currentModel);
+                currentModel.position.set(0, 0.2, 0);
+                currentModel.scale.set(1, 1, 1);
+                targetScaleVal = 1;
+                loadStatusDiv.textContent = "✅ 乌铜走银模型已加载 | 开始手势控制";
+                loadStatusDiv.style.color = "#e6b45e";
+                setTimeout(() => loadStatusDiv.style.opacity = "0.6", 3000);
+            },
+            (xhr) => {
+                const pct = Math.floor((xhr.loaded / xhr.total) * 100);
+                loadStatusDiv.textContent = `⏳ 模型加载 ${pct}%`;
+            },
+            (error) => {
+                console.warn("模型加载失败，启用备用几何体", error);
+                if (!backupActive) {
+                    backupActive = true;
+                    currentModel = createBackupModel();
+                    scene.add(currentModel);
+                    currentModel.position.set(0, 0.2, 0);
+                    loadStatusDiv.textContent = "✨ 备用艺术几何体 | 手势仍然有效 ✨";
+                    loadStatusDiv.style.color = "#cd9a5b";
+                }
+            }
+        );
+
+        setTimeout(() => {
+            if (!currentModel && !backupActive) {
+                backupActive = true;
+                currentModel = createBackupModel();
+                scene.add(currentModel);
+                currentModel.position.set(0, 0.2, 0);
+                loadStatusDiv.textContent = "⚠️ 模型加载超时，使用备用几何体";
+            }
+        }, 5000);
+
+        function updateModel(deltaSec) {
+            if (!currentModel) return;
+            const curScale = currentModel.scale.x;
+            const newScale = curScale + (targetScaleVal - curScale) * 0.12;
+            currentModel.scale.set(newScale, newScale, newScale);
+            currentRotSpeed = currentRotSpeed + (targetRotSpeed - currentRotSpeed) * 0.1;
+            currentModel.rotation.y += currentRotSpeed * deltaSec;
+        }
+
+        // MediaPipe 手势识别
+        let lastGesture = 'neutral';
+        const videoElem = document.getElementById('videoCam');
+        let handsInstance = null;
+        let cameraHelper = null;
+
+        function isFingerExtended(landmarks, tipIdx, baseIdx, isThumb = false) {
+            const tip = landmarks[tipIdx];
+            const base = landmarks[baseIdx];
+            if (!tip || !base) return false;
+            if (!isThumb) return tip.y < base.y - 0.02;
+            else return Math.abs(tip.x - base.x) > 0.07;
+        }
+
+        function detectGesture(landmarks) {
+            const thumb = isFingerExtended(landmarks, 4, 3, true);
+            const index = isFingerExtended(landmarks, 8, 5, false);
+            const middle = isFingerExtended(landmarks, 12, 9, false);
+            const ring = isFingerExtended(landmarks, 16, 13, false);
+            const pinky = isFingerExtended(landmarks, 20, 17, false);
+            const extendedCount = [thumb, index, middle, ring, pinky].filter(v => v === true).length;
+            if (thumb && index && middle && ring && pinky) return 'open';
+            if (extendedCount <= 1) return 'fist';
+            return 'neutral';
+        }
+
+        function applyGesture(gesture) {
+            switch(gesture) {
+                case 'open':
+                    targetRotSpeed = 2.3;
+                    targetScaleVal = 1.55;
+                    gestureSpan.innerHTML = "✋ 张开手掌 · 旋转加速 & 放大";
+                    break;
+                case 'fist':
+                    targetRotSpeed = 0.0;
+                    targetScaleVal = 0.75;
+                    gestureSpan.innerHTML = "✊ 握拳 · 静止 & 缩小";
+                    break;
+                default:
+                    targetRotSpeed = 0.68;
+                    targetScaleVal = 1.0;
+                    gestureSpan.innerHTML = "🤚 自然手势 · 缓慢旋转";
+                    break;
+            }
+        }
+
+        function onHandResults(results) {
+            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+                if (lastGesture !== 'neutral') {
+                    lastGesture = 'neutral';
+                    applyGesture('neutral');
+                }
+                return;
+            }
+            const landmarks = results.multiHandLandmarks[0];
+            const gesture = detectGesture(landmarks);
+            if (gesture !== lastGesture) {
+                lastGesture = gesture;
+                applyGesture(gesture);
+            } else {
+                applyGesture(gesture);
+            }
+        }
+
+        function initMediaPipe() {
+            if (!window.Hands) {
+                gestureSpan.innerHTML = "❌ 手势库加载失败";
+                return;
+            }
+            handsInstance = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+            handsInstance.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+            handsInstance.onResults(onHandResults);
+            cameraHelper = new Camera(videoElem, { onFrame: async () => { if (handsInstance) await handsInstance.send({ image: videoElem }); }, width: 640, height: 480 });
+            cameraHelper.start().then(() => {
+                gestureSpan.innerHTML = "🤚 检测中...";
+            }).catch(err => {
+                gestureSpan.innerHTML = "⚠️ 摄像头不可用";
+                loadStatusDiv.textContent = "⚠️ 请允许摄像头权限后刷新页面";
+            });
+        }
+
+        initMediaPipe();
+
+        // 音乐
+        let audio = null;
+        let musicPlaying = false;
+        const musicBtn = document.getElementById('musicButton');
+        function createAudio() {
+            const aud = new Audio('./yapu.mp3');
+            aud.loop = true;
+            aud.volume = 0.5;
+            aud.addEventListener('error', () => console.warn("音乐文件加载失败"));
+            return aud;
+        }
+        musicBtn.addEventListener('click', () => {
+            if (!audio) audio = createAudio();
+            if (musicPlaying) {
+                audio.pause();
+                musicPlaying = false;
+                musicBtn.style.boxShadow = "0 4px 12px rgba(0,0,0,0.4)";
+            } else {
+                audio.play().then(() => {
+                    musicPlaying = true;
+                    musicBtn.style.boxShadow = "0 0 15px rgba(205,127,50,0.8)";
+                }).catch(e => console.log("播放失败", e));
+            }
+        });
+
+        function animate() {
+            const now = performance.now();
+            let delta = Math.min(0.033, (now - lastTimestamp) / 1000);
+            if (delta <= 0) delta = 0.016;
+            lastTimestamp = now;
+            updateModel(delta);
+            particles.rotation.y += 0.002;
+            particles.rotation.x += 0.001;
+            const t = Date.now() * 0.002;
+            rimLight.intensity = 0.45 + Math.sin(t) * 0.08;
+            fillLight.intensity = 0.55 + Math.cos(t * 0.7) * 0.1;
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
