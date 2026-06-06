@@ -70,8 +70,8 @@
             margin-top: 5px;
         }
 
-        /* 麦克风提示区 */
-        .mic-preview {
+        /* 麦克风状态提示 */
+        .mic-status {
             position: absolute;
             bottom: 20px;
             left: 20px;
@@ -129,7 +129,7 @@
         }
 
         @media (max-width: 600px) {
-            .mic-preview { bottom: 12px; left: 12px; font-size: 10px; padding: 5px 10px; }
+            .mic-status { bottom: 12px; left: 12px; font-size: 10px; padding: 5px 10px; }
             .info-panel { top: 12px; left: 12px; padding: 8px 14px; font-size: 12px; }
             .music-btn { width: 48px; height: 48px; bottom: 18px; right: 18px; }
             .volume-meter { width: 100px; }
@@ -144,14 +144,15 @@
             <span id="volumeLevel" class="volume-badge">安静</span>
             <div class="volume-meter"><div id="volumeFill" class="volume-meter-fill"></div></div>
         </div>
-        <div class="hint-text">🗣️ 日常说话音量 → 器物平滑缩放 &nbsp;|&nbsp; 🤫 安静 → 缓慢旋转</div>
+        <div class="hint-text">🗣️ 说话音量越大 → 器物越大 &nbsp;|&nbsp; 🤫 安静 → 恢复大小 + 缓慢旋转</div>
     </div>
-    <div class="mic-preview" id="micStatus">🎙️ 等待麦克风授权...</div>
+    <div class="mic-status" id="micStatus">🎙️ 等待麦克风授权...</div>
     <div class="music-btn" id="musicButton">
         <span class="music-icon">🎵</span>
     </div>
     <div class="loading-tip" id="loadStatus">⚙️ 初始化中...</div>
 
+    <!-- 引入 Three.js -->
     <script type="importmap">
         {
             "imports": {
@@ -165,7 +166,7 @@
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-        // ---------- 初始化场景 ----------
+        // ---------- 初始化场景 (完全继承手势版本的灯光、相机等) ----------
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x0a0806);
         scene.fog = new THREE.FogExp2(0x0a0806, 0.008);
@@ -220,8 +221,7 @@
         // ---------- 模型变量 ----------
         let currentModel = null;
         let targetScaleVal = 1.0;          // 目标缩放
-        let currentScaleVal = 1.0;         // 当前缩放（用于平滑）
-        const ROTATION_SPEED = 0.58;        // 恒定缓慢旋转速度 (弧度/秒) - 柔和
+        const ROTATION_SPEED = 0.58;        // 恒定缓慢旋转速度 (弧度/秒)
 
         const loadStatusDiv = document.getElementById('loadStatus');
         const volumeLevelSpan = document.getElementById('volumeLevel');
@@ -246,7 +246,7 @@
             return knot;
         }
 
-        // 尝试加载 wutong.glb
+        // 尝试加载 wutong.glb (与手势版本完全相同的加载逻辑)
         const loader = new GLTFLoader();
         let backupActive = false;
         loadStatusDiv.textContent = "📦 正在加载乌铜模型...";
@@ -270,7 +270,6 @@
                 currentModel.position.set(0, 0.2, 0);
                 currentModel.scale.set(1, 1, 1);
                 targetScaleVal = 1;
-                currentScaleVal = 1;
                 loadStatusDiv.textContent = "✅ 乌铜走银模型已加载 | 请对麦克风说话";
                 loadStatusDiv.style.color = "#e6b45e";
                 setTimeout(() => loadStatusDiv.style.opacity = "0.6", 3000);
@@ -311,8 +310,8 @@
         let isMicActive = false;
         let lastVolume = 0;          // 用于平滑的上一帧音量
 
-        // 改进的音量到缩放映射：让日常说话（音量值通常在 15~120 之间）平稳过渡
-        // 映射范围：缩放 0.85 ~ 1.4，并且使用 easeOutCubic 曲线让变化更自然
+        // 音量到缩放映射：让日常说话（音量值通常在 15~120 之间）平稳过渡
+        // 映射范围：缩放 0.85 ~ 1.4，使用 easeOutCubic 曲线自然
         function mapVolumeToScale(volume) {
             // 静音阈值：低于 8 完全保持 1.0
             if (volume < 8) return 1.0;
@@ -327,12 +326,12 @@
             return minScale + easeOut * (maxScale - minScale);
         }
 
-        // 获取当前音量幅度 (0-255 范围，更符合日常分贝)
+        // 获取当前音量幅度 (0-255 范围)
         function getCurrentVolume() {
             if (!analyserNode) return 0;
             const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
             analyserNode.getByteTimeDomainData(dataArray);
-            // 计算 RMS 均方根，代表实际音量强度
+            // 计算 RMS 均方根
             let sum = 0;
             for (let i = 0; i < dataArray.length; i++) {
                 const v = (dataArray[i] - 128) / 128;
@@ -348,7 +347,7 @@
         function updateVolumeDisplayAndScale() {
             if (!isMicActive) return;
             const rawVolume = getCurrentVolume();
-            // 使用更灵敏的平滑：历史0.6，新值0.4，响应更快但不跳跃
+            // 使用适中的平滑：历史0.6，新值0.4
             const smoothedVolume = lastVolume * 0.6 + rawVolume * 0.4;
             lastVolume = smoothedVolume;
             
@@ -399,7 +398,7 @@
             }
         }
 
-        // 页面加载后延迟请求麦克风（避免自动策略冲突）
+        // 页面加载后延迟请求麦克风
         setTimeout(() => {
             initMicrophone().catch(e => console.warn(e));
         }, 1000);
@@ -418,16 +417,15 @@
         let lastTimestamp = performance.now();
         function updateModelScale(deltaSec) {
             if (!currentModel) return;
-            // 平滑缩放 (系数0.2，更顺滑)
+            // 平滑缩放 (系数0.2，顺滑)
             const cur = currentModel.scale.x;
             const newScale = cur + (targetScaleVal - cur) * 0.2;
             currentModel.scale.set(newScale, newScale, newScale);
-            currentScaleVal = newScale;
-            // 恒定旋转：安静时旋转，大声/小声时依然有轻微旋转，保持生动
+            // 恒定旋转：始终缓慢旋转，不受音量影响
             currentModel.rotation.y += ROTATION_SPEED * deltaSec;
         }
 
-        // ---------- 背景音乐 (右下角按钮) ----------
+        // ---------- 背景音乐 (右下角按钮) 完全保留手势版本的逻辑 ----------
         let audio = null;
         let musicPlaying = false;
         const musicBtn = document.getElementById('musicButton');
@@ -491,7 +489,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        console.log("%c✨ 乌铜走银 · 声音交互已优化 | 日常说话即可平滑控制器物 ✨", "color: #cd7f32; font-size: 14px");
+        console.log("%c✨ 乌铜走银 · 声音交互版 | 正常说话即可平滑控制器物大小 ✨", "color: #cd7f32; font-size: 14px");
     </script>
 </body>
 </html>
