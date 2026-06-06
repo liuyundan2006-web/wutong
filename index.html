@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>乌铜走银 · 声控灵境</title>
+    <title>乌铜走银 · 声控灵韵</title>
     <style>
         body {
             margin: 0;
@@ -70,7 +70,7 @@
             margin-top: 5px;
         }
 
-        /* 摄像头小窗已移除，改用麦克风提示 */
+        /* 麦克风提示区 */
         .mic-preview {
             position: absolute;
             bottom: 20px;
@@ -144,7 +144,7 @@
             <span id="volumeLevel" class="volume-badge">安静</span>
             <div class="volume-meter"><div id="volumeFill" class="volume-meter-fill"></div></div>
         </div>
-        <div class="hint-text">🔊 大声说话 → 器物放大 &nbsp;&nbsp; 🔉 小声说话 → 器物缩小 &nbsp;&nbsp; 🤫 安静 → 缓慢旋转</div>
+        <div class="hint-text">🗣️ 日常说话音量 → 器物平滑缩放 &nbsp;|&nbsp; 🤫 安静 → 缓慢旋转</div>
     </div>
     <div class="mic-preview" id="micStatus">🎙️ 等待麦克风授权...</div>
     <div class="music-btn" id="musicButton">
@@ -152,7 +152,6 @@
     </div>
     <div class="loading-tip" id="loadStatus">⚙️ 初始化中...</div>
 
-    <!-- 引入 Three.js -->
     <script type="importmap">
         {
             "imports": {
@@ -220,10 +219,9 @@
 
         // ---------- 模型变量 ----------
         let currentModel = null;
-        let targetScaleVal = 1.0;      // 目标缩放
-        let currentScaleVal = 1.0;     // 当前缩放（用于平滑）
-        const ROTATION_SPEED = 0.68;    // 恒定缓慢旋转速度 (弧度/秒)
-        let lastTimestamp = performance.now();
+        let targetScaleVal = 1.0;          // 目标缩放
+        let currentScaleVal = 1.0;         // 当前缩放（用于平滑）
+        const ROTATION_SPEED = 0.58;        // 恒定缓慢旋转速度 (弧度/秒) - 柔和
 
         const loadStatusDiv = document.getElementById('loadStatus');
         const volumeLevelSpan = document.getElementById('volumeLevel');
@@ -242,7 +240,6 @@
             });
             const knot = new THREE.Mesh(geometry, material);
             knot.castShadow = true;
-            // 加一圈线框修饰
             const wireframeMat = new THREE.MeshBasicMaterial({ color: 0xc9a87b, wireframe: true, transparent: true, opacity: 0.15 });
             const wire = new THREE.Mesh(geometry, wireframeMat);
             knot.add(wire);
@@ -306,76 +303,65 @@
             }
         }, 5000);
 
-        // ---------- 音量检测（麦克风）----------
+        // ---------- 音量检测（麦克风）优化版：平滑、符合日常交谈分贝 ----------
         let mediaStream = null;
         let audioContext = null;
         let sourceNode = null;
         let analyserNode = null;
-        let animationFrameId = null;
         let isMicActive = false;
+        let lastVolume = 0;          // 用于平滑的上一帧音量
 
-        // 将原始音量幅度 (0-255) 映射到目标缩放值
-        // 设计：安静时 (音量 < 15)  scale = 1.0
-        //      小声 (15~60)   scale 0.75 ~ 1.0
-        //      中声 (60~120)  scale 1.0 ~ 1.3
-        //      大声 (120~200) scale 1.3 ~ 1.7
-        //      极大 (200+)    scale 1.7
+        // 改进的音量到缩放映射：让日常说话（音量值通常在 15~120 之间）平稳过渡
+        // 映射范围：缩放 0.85 ~ 1.4，并且使用 easeOutCubic 曲线让变化更自然
         function mapVolumeToScale(volume) {
-            if (volume < 15) return 1.0;          // 安静
-            if (volume < 60) {
-                // 线性映射 0.75 ~ 1.0
-                const t = (volume - 15) / 45;
-                return 0.75 + t * 0.25;
-            }
-            if (volume < 120) {
-                const t = (volume - 60) / 60;
-                return 1.0 + t * 0.3;   // 1.0 ~ 1.3
-            }
-            if (volume < 200) {
-                const t = (volume - 120) / 80;
-                return 1.3 + t * 0.4;   // 1.3 ~ 1.7
-            }
-            return 1.7;
+            // 静音阈值：低于 8 完全保持 1.0
+            if (volume < 8) return 1.0;
+            // 定义最小和最大缩放（避免极端大小）
+            const minScale = 0.85;
+            const maxScale = 1.4;
+            // 音量映射区间：8 ~ 180 (超过 180 认为最大)
+            let t = (volume - 8) / 172;
+            t = Math.min(1.0, Math.max(0.0, t));
+            // 使用 easeOutCubic 曲线：变化先快后慢，更符合听觉
+            const easeOut = 1 - Math.pow(1 - t, 3);
+            return minScale + easeOut * (maxScale - minScale);
         }
 
-        // 获取当前音量幅度 (0-255)
+        // 获取当前音量幅度 (0-255 范围，更符合日常分贝)
         function getCurrentVolume() {
             if (!analyserNode) return 0;
             const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
             analyserNode.getByteTimeDomainData(dataArray);
-            // 计算平均幅度 (简单有效)
+            // 计算 RMS 均方根，代表实际音量强度
             let sum = 0;
             for (let i = 0; i < dataArray.length; i++) {
                 const v = (dataArray[i] - 128) / 128;
                 sum += v * v;
             }
             let rms = Math.sqrt(sum / dataArray.length) || 0;
-            // 转换为 0-255 范围方便直观
-            let volume = Math.min(255, Math.floor(rms * 255));
-            // 添加一点平滑
+            // 增加一点增益，使日常说话更容易进入有效区间 (乘以1.4)
+            let volume = Math.min(255, Math.floor(rms * 255 * 1.4));
             return volume;
         }
 
         // 更新 UI 显示和模型缩放目标
-        let lastVolume = 0;
         function updateVolumeDisplayAndScale() {
             if (!isMicActive) return;
             const rawVolume = getCurrentVolume();
-            // 平滑音量显示 (避免跳动)
-            const smoothedVolume = lastVolume * 0.7 + rawVolume * 0.3;
+            // 使用更灵敏的平滑：历史0.6，新值0.4，响应更快但不跳跃
+            const smoothedVolume = lastVolume * 0.6 + rawVolume * 0.4;
             lastVolume = smoothedVolume;
             
             // 更新 UI 文字和进度条
-            let volumeText = "安静";
-            if (smoothedVolume > 150) volumeText = "🔊 大声";
-            else if (smoothedVolume > 80) volumeText = "🗣️ 中等";
-            else if (smoothedVolume > 25) volumeText = "🔉 小声";
-            else volumeText = "🤫 安静";
+            let volumeText = "🤫 安静";
+            if (smoothedVolume > 130) volumeText = "🔊 大声";
+            else if (smoothedVolume > 70) volumeText = "🗣️ 正常交谈";
+            else if (smoothedVolume > 25) volumeText = "🔉 轻声";
             volumeLevelSpan.innerHTML = volumeText;
             const percent = Math.min(100, (smoothedVolume / 255) * 100);
             volumeFillDiv.style.width = percent + "%";
             
-            // 根据音量计算目标缩放
+            // 根据平滑后的音量计算目标缩放
             const newTargetScale = mapVolumeToScale(smoothedVolume);
             targetScaleVal = newTargetScale;
         }
@@ -393,11 +379,11 @@
                 // 不连接扬声器，只用于分析
                 await audioContext.resume();
                 isMicActive = true;
-                micStatusSpan.innerHTML = "🎙️ 麦克风工作中 | 大声/小声控制器物";
+                micStatusSpan.innerHTML = "🎙️ 麦克风工作中 | 正常说话即可控制大小";
                 micStatusSpan.style.color = "#e6b45e";
                 console.log("麦克风已启动，音量检测开始");
                 
-                // 启动音量轮询
+                // 启动音量轮询 (使用 requestAnimationFrame 保证与渲染同步)
                 function volumeLoop() {
                     if (!isMicActive) return;
                     updateVolumeDisplayAndScale();
@@ -409,21 +395,16 @@
                 micStatusSpan.innerHTML = "⚠️ 无法获取麦克风权限，请刷新页面并允许麦克风";
                 micStatusSpan.style.color = "#db3f39";
                 isMicActive = false;
-                // 降级：没有麦克风时，模型维持默认缩放1.0
                 targetScaleVal = 1.0;
             }
         }
 
-        // 页面加载后自动请求麦克风权限（需要用户交互，但现代浏览器在用户点击后才会允许自动播放？麦克风可以在页面加载时请求，但需要用户授权弹窗）
-        // 为了更好的体验，在页面任何地方点击时激活音频上下文（因为AudioContext需要用户交互后才能启动）
-        // 但getUserMedia可以在页面加载时调用，会弹出权限弹窗。为了兼容，在页面加载后立即请求。
-        // 注意：iOS上需要用户手势才能启动AudioContext，但getUserMedia也会触发权限请求。
-        // 我们将在页面加载后2秒尝试请求，同时绑定一个全局点击来确保AudioContext恢复。
+        // 页面加载后延迟请求麦克风（避免自动策略冲突）
         setTimeout(() => {
             initMicrophone().catch(e => console.warn(e));
         }, 1000);
         
-        // 确保AudioContext在用户首次点击页面时恢复（如果因自动策略被挂起）
+        // 确保 AudioContext 在用户首次点击页面时恢复（如果因自动策略被挂起）
         const resumeAudioContext = async () => {
             if (audioContext && audioContext.state === 'suspended') {
                 await audioContext.resume();
@@ -434,14 +415,15 @@
         window.addEventListener('touchstart', resumeAudioContext, { once: true });
 
         // ---------- 模型缩放更新（每帧平滑）----------
+        let lastTimestamp = performance.now();
         function updateModelScale(deltaSec) {
             if (!currentModel) return;
-            // 平滑缩放
+            // 平滑缩放 (系数0.2，更顺滑)
             const cur = currentModel.scale.x;
-            const newScale = cur + (targetScaleVal - cur) * 0.15;
+            const newScale = cur + (targetScaleVal - cur) * 0.2;
             currentModel.scale.set(newScale, newScale, newScale);
             currentScaleVal = newScale;
-            // 恒定旋转
+            // 恒定旋转：安静时旋转，大声/小声时依然有轻微旋转，保持生动
             currentModel.rotation.y += ROTATION_SPEED * deltaSec;
         }
 
@@ -475,7 +457,6 @@
                     musicBtn.style.boxShadow = "0 0 15px rgba(205,127,50,0.8)";
                 }).catch(e => {
                     console.log("播放被浏览器拦截，请再次点击", e);
-                    // 再次尝试
                     audio.play().catch(() => {});
                 });
             }
@@ -510,8 +491,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        // 控制台提示
-        console.log("%c✨ 乌铜走银 · 声音交互已启动 | 大声放大，小声缩小 ✨", "color: #cd7f32; font-size: 14px");
+        console.log("%c✨ 乌铜走银 · 声音交互已优化 | 日常说话即可平滑控制器物 ✨", "color: #cd7f32; font-size: 14px");
     </script>
 </body>
 </html>
