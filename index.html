@@ -3,37 +3,156 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>乌铜走银 · 手势灵境</title>
+    <title>乌铜走银 · 声控灵境</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: "PingFang SC", system-ui, sans-serif; }
-        .info-panel { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); border-left: 4px solid #cd7f32; border-radius: 12px; padding: 12px 20px; color: #e6c8a0; z-index: 20; pointer-events: none; }
-        .gesture-status { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
-        .gesture-badge { background: #2c1a0c; padding: 4px 12px; border-radius: 30px; color: #e6b45e; border: 1px solid #cd7f32; }
-        .camera-preview { position: absolute; bottom: 20px; left: 20px; width: 130px; height: 98px; border-radius: 12px; overflow: hidden; border: 2px solid #cd7f32; z-index: 20; background: #000; opacity: 0.85; pointer-events: none; }
-        .camera-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-        .music-btn { position: absolute; bottom: 25px; right: 25px; width: 56px; height: 56px; border-radius: 50%; background: radial-gradient(circle at 30% 20%, #2f2a24, #1a140e); border: 1px solid #b87c3a; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 30; }
-        .music-icon { font-size: 28px; color: #e6b45e; }
-        .loading-tip { position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 20px; font-size: 12px; color: #cd9a5b; z-index: 20; pointer-events: none; }
-        @media (max-width: 600px) { .camera-preview { width: 90px; height: 68px; } .music-btn { width: 48px; height: 48px; } }
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        /* 乌铜走银风格面板 */
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            border-left: 4px solid #cd7f32;
+            border-radius: 12px;
+            padding: 12px 20px;
+            color: #e6c8a0;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            z-index: 20;
+            pointer-events: none;
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+        .info-panel h1 {
+            margin: 0 0 5px;
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+        .volume-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+        .volume-badge {
+            background: #2c1a0c;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-weight: bold;
+            color: #e6b45e;
+            border: 1px solid #cd7f32;
+            pointer-events: auto;
+            font-size: 0.9rem;
+        }
+        .volume-meter {
+            width: 140px;
+            height: 6px;
+            background: #3a2a1c;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-left: 5px;
+        }
+        .volume-meter-fill {
+            width: 0%;
+            height: 100%;
+            background: #cd7f32;
+            transition: width 0.05s linear;
+        }
+        .hint-text {
+            font-size: 0.75rem;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+
+        /* 摄像头小窗已移除，改用麦克风提示 */
+        .mic-preview {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            padding: 8px 14px;
+            border-radius: 30px;
+            color: #cd9a5b;
+            font-size: 12px;
+            font-family: monospace;
+            z-index: 20;
+            border: 1px solid #cd7f32;
+            pointer-events: none;
+        }
+
+        /* 音乐按钮 */
+        .music-btn {
+            position: absolute;
+            bottom: 25px;
+            right: 25px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 20%, #2f2a24, #1a140e);
+            border: 1px solid #b87c3a;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 30;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .music-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 12px rgba(205,127,50,0.5);
+        }
+        .music-icon {
+            font-size: 28px;
+            color: #e6b45e;
+        }
+
+        .loading-tip {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.6);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #cd9a5b;
+            z-index: 20;
+            pointer-events: none;
+            font-family: monospace;
+        }
+
+        @media (max-width: 600px) {
+            .mic-preview { bottom: 12px; left: 12px; font-size: 10px; padding: 5px 10px; }
+            .info-panel { top: 12px; left: 12px; padding: 8px 14px; font-size: 12px; }
+            .music-btn { width: 48px; height: 48px; bottom: 18px; right: 18px; }
+            .volume-meter { width: 100px; }
+        }
     </style>
 </head>
 <body>
     <div class="info-panel">
-        <h1>🏺 乌铜走银 · 灵韵匠心</h1>
-        <div class="gesture-status">
-            <span>✋ 手势：</span>
-            <span id="gestureDisplay" class="gesture-badge">等待摄像头...</span>
+        <h1>🏺 乌铜走银 · 声控灵韵</h1>
+        <div class="volume-status">
+            <span>🎤 音量强度：</span>
+            <span id="volumeLevel" class="volume-badge">安静</span>
+            <div class="volume-meter"><div id="volumeFill" class="volume-meter-fill"></div></div>
         </div>
-        <div class="hint-text">✋ 张开手掌 → 加速旋转+放大 &nbsp;&nbsp; ✊ 握拳 → 停止+缩小</div>
+        <div class="hint-text">🔊 大声说话 → 器物放大 &nbsp;&nbsp; 🔉 小声说话 → 器物缩小 &nbsp;&nbsp; 🤫 安静 → 缓慢旋转</div>
     </div>
-    <div class="camera-preview">
-        <video id="videoCam" autoplay playsinline muted></video>
-    </div>
+    <div class="mic-preview" id="micStatus">🎙️ 等待麦克风授权...</div>
     <div class="music-btn" id="musicButton">
         <span class="music-icon">🎵</span>
     </div>
     <div class="loading-tip" id="loadStatus">⚙️ 初始化中...</div>
 
+    <!-- 引入 Three.js -->
     <script type="importmap">
         {
             "imports": {
@@ -42,13 +161,12 @@
             }
         }
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
     <script type="module">
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+        // ---------- 初始化场景 ----------
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x0a0806);
         scene.fog = new THREE.FogExp2(0x0a0806, 0.008);
@@ -62,7 +180,7 @@
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // 灯光
+        // 灯光（金属质感）
         const ambient = new THREE.AmbientLight(0x2a241e, 0.6);
         scene.add(ambient);
         const mainLight = new THREE.DirectionalLight(0xd9b48b, 1.2);
@@ -79,13 +197,14 @@
         rimLight.position.set(0, -0.5, 1);
         scene.add(rimLight);
 
+        // 辅助地面
         const grid = new THREE.GridHelper(8, 20, 0x9c7c4b, 0x4a3724);
         grid.position.y = -0.7;
         grid.material.transparent = true;
         grid.material.opacity = 0.25;
         scene.add(grid);
 
-        // 粒子
+        // 漂浮粒子
         const particleCount = 800;
         const particleGeo = new THREE.BufferGeometry();
         const positions = new Float32Array(particleCount * 3);
@@ -99,26 +218,38 @@
         const particles = new THREE.Points(particleGeo, particleMat);
         scene.add(particles);
 
+        // ---------- 模型变量 ----------
         let currentModel = null;
-        let targetScaleVal = 1.0;
-        let targetRotSpeed = 0.68;
-        let currentRotSpeed = 0.68;
+        let targetScaleVal = 1.0;      // 目标缩放
+        let currentScaleVal = 1.0;     // 当前缩放（用于平滑）
+        const ROTATION_SPEED = 0.68;    // 恒定缓慢旋转速度 (弧度/秒)
         let lastTimestamp = performance.now();
 
         const loadStatusDiv = document.getElementById('loadStatus');
-        const gestureSpan = document.getElementById('gestureDisplay');
+        const volumeLevelSpan = document.getElementById('volumeLevel');
+        const volumeFillDiv = document.getElementById('volumeFill');
+        const micStatusSpan = document.getElementById('micStatus');
 
+        // 备用几何体（圆环结）
         function createBackupModel() {
             const geometry = new THREE.TorusKnotGeometry(0.65, 0.16, 200, 24, 3, 4);
-            const material = new THREE.MeshStandardMaterial({ color: 0xbc7332, emissive: 0x2a1a0c, roughness: 0.3, metalness: 0.92, emissiveIntensity: 0.2 });
+            const material = new THREE.MeshStandardMaterial({
+                color: 0xbc7332,
+                emissive: 0x2a1a0c,
+                roughness: 0.3,
+                metalness: 0.92,
+                emissiveIntensity: 0.2
+            });
             const knot = new THREE.Mesh(geometry, material);
             knot.castShadow = true;
+            // 加一圈线框修饰
             const wireframeMat = new THREE.MeshBasicMaterial({ color: 0xc9a87b, wireframe: true, transparent: true, opacity: 0.15 });
             const wire = new THREE.Mesh(geometry, wireframeMat);
             knot.add(wire);
             return knot;
         }
 
+        // 尝试加载 wutong.glb
         const loader = new GLTFLoader();
         let backupActive = false;
         loadStatusDiv.textContent = "📦 正在加载乌铜模型...";
@@ -142,7 +273,8 @@
                 currentModel.position.set(0, 0.2, 0);
                 currentModel.scale.set(1, 1, 1);
                 targetScaleVal = 1;
-                loadStatusDiv.textContent = "✅ 乌铜走银模型已加载 | 开始手势控制";
+                currentScaleVal = 1;
+                loadStatusDiv.textContent = "✅ 乌铜走银模型已加载 | 请对麦克风说话";
                 loadStatusDiv.style.color = "#e6b45e";
                 setTimeout(() => loadStatusDiv.style.opacity = "0.6", 3000);
             },
@@ -157,12 +289,13 @@
                     currentModel = createBackupModel();
                     scene.add(currentModel);
                     currentModel.position.set(0, 0.2, 0);
-                    loadStatusDiv.textContent = "✨ 备用艺术几何体 | 手势仍然有效 ✨";
+                    loadStatusDiv.textContent = "✨ 备用艺术几何体 | 声音控制依然有效 ✨";
                     loadStatusDiv.style.color = "#cd9a5b";
                 }
             }
         );
 
+        // 超时兜底
         setTimeout(() => {
             if (!currentModel && !backupActive) {
                 backupActive = true;
@@ -173,111 +306,165 @@
             }
         }, 5000);
 
-        function updateModel(deltaSec) {
-            if (!currentModel) return;
-            const curScale = currentModel.scale.x;
-            const newScale = curScale + (targetScaleVal - curScale) * 0.12;
-            currentModel.scale.set(newScale, newScale, newScale);
-            currentRotSpeed = currentRotSpeed + (targetRotSpeed - currentRotSpeed) * 0.1;
-            currentModel.rotation.y += currentRotSpeed * deltaSec;
-        }
+        // ---------- 音量检测（麦克风）----------
+        let mediaStream = null;
+        let audioContext = null;
+        let sourceNode = null;
+        let analyserNode = null;
+        let animationFrameId = null;
+        let isMicActive = false;
 
-        // MediaPipe 手势识别
-        let lastGesture = 'neutral';
-        const videoElem = document.getElementById('videoCam');
-        let handsInstance = null;
-        let cameraHelper = null;
-
-        function isFingerExtended(landmarks, tipIdx, baseIdx, isThumb = false) {
-            const tip = landmarks[tipIdx];
-            const base = landmarks[baseIdx];
-            if (!tip || !base) return false;
-            if (!isThumb) return tip.y < base.y - 0.02;
-            else return Math.abs(tip.x - base.x) > 0.07;
-        }
-
-        function detectGesture(landmarks) {
-            const thumb = isFingerExtended(landmarks, 4, 3, true);
-            const index = isFingerExtended(landmarks, 8, 5, false);
-            const middle = isFingerExtended(landmarks, 12, 9, false);
-            const ring = isFingerExtended(landmarks, 16, 13, false);
-            const pinky = isFingerExtended(landmarks, 20, 17, false);
-            const extendedCount = [thumb, index, middle, ring, pinky].filter(v => v === true).length;
-            if (thumb && index && middle && ring && pinky) return 'open';
-            if (extendedCount <= 1) return 'fist';
-            return 'neutral';
-        }
-
-        function applyGesture(gesture) {
-            switch(gesture) {
-                case 'open':
-                    targetRotSpeed = 2.3;
-                    targetScaleVal = 1.55;
-                    gestureSpan.innerHTML = "✋ 张开手掌 · 旋转加速 & 放大";
-                    break;
-                case 'fist':
-                    targetRotSpeed = 0.0;
-                    targetScaleVal = 0.75;
-                    gestureSpan.innerHTML = "✊ 握拳 · 静止 & 缩小";
-                    break;
-                default:
-                    targetRotSpeed = 0.68;
-                    targetScaleVal = 1.0;
-                    gestureSpan.innerHTML = "🤚 自然手势 · 缓慢旋转";
-                    break;
+        // 将原始音量幅度 (0-255) 映射到目标缩放值
+        // 设计：安静时 (音量 < 15)  scale = 1.0
+        //      小声 (15~60)   scale 0.75 ~ 1.0
+        //      中声 (60~120)  scale 1.0 ~ 1.3
+        //      大声 (120~200) scale 1.3 ~ 1.7
+        //      极大 (200+)    scale 1.7
+        function mapVolumeToScale(volume) {
+            if (volume < 15) return 1.0;          // 安静
+            if (volume < 60) {
+                // 线性映射 0.75 ~ 1.0
+                const t = (volume - 15) / 45;
+                return 0.75 + t * 0.25;
             }
+            if (volume < 120) {
+                const t = (volume - 60) / 60;
+                return 1.0 + t * 0.3;   // 1.0 ~ 1.3
+            }
+            if (volume < 200) {
+                const t = (volume - 120) / 80;
+                return 1.3 + t * 0.4;   // 1.3 ~ 1.7
+            }
+            return 1.7;
         }
 
-        function onHandResults(results) {
-            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-                if (lastGesture !== 'neutral') {
-                    lastGesture = 'neutral';
-                    applyGesture('neutral');
+        // 获取当前音量幅度 (0-255)
+        function getCurrentVolume() {
+            if (!analyserNode) return 0;
+            const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+            analyserNode.getByteTimeDomainData(dataArray);
+            // 计算平均幅度 (简单有效)
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                const v = (dataArray[i] - 128) / 128;
+                sum += v * v;
+            }
+            let rms = Math.sqrt(sum / dataArray.length) || 0;
+            // 转换为 0-255 范围方便直观
+            let volume = Math.min(255, Math.floor(rms * 255));
+            // 添加一点平滑
+            return volume;
+        }
+
+        // 更新 UI 显示和模型缩放目标
+        let lastVolume = 0;
+        function updateVolumeDisplayAndScale() {
+            if (!isMicActive) return;
+            const rawVolume = getCurrentVolume();
+            // 平滑音量显示 (避免跳动)
+            const smoothedVolume = lastVolume * 0.7 + rawVolume * 0.3;
+            lastVolume = smoothedVolume;
+            
+            // 更新 UI 文字和进度条
+            let volumeText = "安静";
+            if (smoothedVolume > 150) volumeText = "🔊 大声";
+            else if (smoothedVolume > 80) volumeText = "🗣️ 中等";
+            else if (smoothedVolume > 25) volumeText = "🔉 小声";
+            else volumeText = "🤫 安静";
+            volumeLevelSpan.innerHTML = volumeText;
+            const percent = Math.min(100, (smoothedVolume / 255) * 100);
+            volumeFillDiv.style.width = percent + "%";
+            
+            // 根据音量计算目标缩放
+            const newTargetScale = mapVolumeToScale(smoothedVolume);
+            targetScaleVal = newTargetScale;
+        }
+
+        // 请求麦克风权限并启动音频分析
+        async function initMicrophone() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaStream = stream;
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyserNode = audioContext.createAnalyser();
+                analyserNode.fftSize = 256;
+                sourceNode = audioContext.createMediaStreamSource(stream);
+                sourceNode.connect(analyserNode);
+                // 不连接扬声器，只用于分析
+                await audioContext.resume();
+                isMicActive = true;
+                micStatusSpan.innerHTML = "🎙️ 麦克风工作中 | 大声/小声控制器物";
+                micStatusSpan.style.color = "#e6b45e";
+                console.log("麦克风已启动，音量检测开始");
+                
+                // 启动音量轮询
+                function volumeLoop() {
+                    if (!isMicActive) return;
+                    updateVolumeDisplayAndScale();
+                    requestAnimationFrame(volumeLoop);
                 }
-                return;
-            }
-            const landmarks = results.multiHandLandmarks[0];
-            const gesture = detectGesture(landmarks);
-            if (gesture !== lastGesture) {
-                lastGesture = gesture;
-                applyGesture(gesture);
-            } else {
-                applyGesture(gesture);
+                volumeLoop();
+            } catch (err) {
+                console.error("麦克风授权失败或不可用", err);
+                micStatusSpan.innerHTML = "⚠️ 无法获取麦克风权限，请刷新页面并允许麦克风";
+                micStatusSpan.style.color = "#db3f39";
+                isMicActive = false;
+                // 降级：没有麦克风时，模型维持默认缩放1.0
+                targetScaleVal = 1.0;
             }
         }
 
-        function initMediaPipe() {
-            if (!window.Hands) {
-                gestureSpan.innerHTML = "❌ 手势库加载失败";
-                return;
+        // 页面加载后自动请求麦克风权限（需要用户交互，但现代浏览器在用户点击后才会允许自动播放？麦克风可以在页面加载时请求，但需要用户授权弹窗）
+        // 为了更好的体验，在页面任何地方点击时激活音频上下文（因为AudioContext需要用户交互后才能启动）
+        // 但getUserMedia可以在页面加载时调用，会弹出权限弹窗。为了兼容，在页面加载后立即请求。
+        // 注意：iOS上需要用户手势才能启动AudioContext，但getUserMedia也会触发权限请求。
+        // 我们将在页面加载后2秒尝试请求，同时绑定一个全局点击来确保AudioContext恢复。
+        setTimeout(() => {
+            initMicrophone().catch(e => console.warn(e));
+        }, 1000);
+        
+        // 确保AudioContext在用户首次点击页面时恢复（如果因自动策略被挂起）
+        const resumeAudioContext = async () => {
+            if (audioContext && audioContext.state === 'suspended') {
+                await audioContext.resume();
+                console.log("AudioContext 已恢复");
             }
-            handsInstance = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-            handsInstance.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-            handsInstance.onResults(onHandResults);
-            cameraHelper = new Camera(videoElem, { onFrame: async () => { if (handsInstance) await handsInstance.send({ image: videoElem }); }, width: 640, height: 480 });
-            cameraHelper.start().then(() => {
-                gestureSpan.innerHTML = "🤚 检测中...";
-            }).catch(err => {
-                gestureSpan.innerHTML = "⚠️ 摄像头不可用";
-                loadStatusDiv.textContent = "⚠️ 请允许摄像头权限后刷新页面";
-            });
+        };
+        window.addEventListener('click', resumeAudioContext, { once: true });
+        window.addEventListener('touchstart', resumeAudioContext, { once: true });
+
+        // ---------- 模型缩放更新（每帧平滑）----------
+        function updateModelScale(deltaSec) {
+            if (!currentModel) return;
+            // 平滑缩放
+            const cur = currentModel.scale.x;
+            const newScale = cur + (targetScaleVal - cur) * 0.15;
+            currentModel.scale.set(newScale, newScale, newScale);
+            currentScaleVal = newScale;
+            // 恒定旋转
+            currentModel.rotation.y += ROTATION_SPEED * deltaSec;
         }
 
-        initMediaPipe();
-
-        // 音乐
+        // ---------- 背景音乐 (右下角按钮) ----------
         let audio = null;
         let musicPlaying = false;
         const musicBtn = document.getElementById('musicButton');
+        
         function createAudio() {
             const aud = new Audio('./yapu.mp3');
             aud.loop = true;
             aud.volume = 0.5;
-            aud.addEventListener('error', () => console.warn("音乐文件加载失败"));
+            aud.addEventListener('error', () => {
+                console.warn("音乐文件加载失败，请确认 yapu.mp3 存在");
+                musicBtn.style.opacity = "0.6";
+            });
             return aud;
         }
+        
         musicBtn.addEventListener('click', () => {
-            if (!audio) audio = createAudio();
+            if (!audio) {
+                audio = createAudio();
+            }
             if (musicPlaying) {
                 audio.pause();
                 musicPlaying = false;
@@ -286,31 +473,45 @@
                 audio.play().then(() => {
                     musicPlaying = true;
                     musicBtn.style.boxShadow = "0 0 15px rgba(205,127,50,0.8)";
-                }).catch(e => console.log("播放失败", e));
+                }).catch(e => {
+                    console.log("播放被浏览器拦截，请再次点击", e);
+                    // 再次尝试
+                    audio.play().catch(() => {});
+                });
             }
         });
 
+        // ---------- 动画循环 ----------
         function animate() {
             const now = performance.now();
             let delta = Math.min(0.033, (now - lastTimestamp) / 1000);
             if (delta <= 0) delta = 0.016;
             lastTimestamp = now;
-            updateModel(delta);
+            
+            updateModelScale(delta);
             particles.rotation.y += 0.002;
             particles.rotation.x += 0.001;
+            
+            // 动态光效
             const t = Date.now() * 0.002;
             rimLight.intensity = 0.45 + Math.sin(t) * 0.08;
             fillLight.intensity = 0.55 + Math.cos(t * 0.7) * 0.1;
+            
             renderer.render(scene, camera);
             requestAnimationFrame(animate);
         }
+        
+        lastTimestamp = performance.now();
         animate();
-
+        
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+        
+        // 控制台提示
+        console.log("%c✨ 乌铜走银 · 声音交互已启动 | 大声放大，小声缩小 ✨", "color: #cd7f32; font-size: 14px");
     </script>
 </body>
 </html>
